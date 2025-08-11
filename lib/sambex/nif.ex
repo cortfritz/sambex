@@ -19,6 +19,7 @@ defmodule Sambex.Nif do
       @cInclude("libsmbclient.h");
       @cInclude("stdlib.h");
       @cInclude("string.h");
+      @cInclude("errno.h");
   });
 
   // Global credentials storage
@@ -466,11 +467,17 @@ defmodule Sambex.Nif do
           return beam.make(.{error_atom, memory_error_atom}, .{});
       };
 
+      // Set the context as current for libsmbclient
+      const old_ctx = c.smbc_set_context(ctx);
+      defer _ = c.smbc_set_context(old_ctx);
+
+      // Delete the file using the proper context
       const result = c.smbc_unlink(url_cstr.ptr);
       if (result < 0) {
           const error_atom = beam.make_error_atom(.{});
           const delete_failed_atom = beam.make_into_atom("delete_failed", .{});
-          return beam.make(.{error_atom, delete_failed_atom}, .{});
+          const result_term = beam.make(result, .{});
+          return beam.make(.{error_atom, delete_failed_atom, result_term}, .{});
       }
 
       return beam.make_into_atom("ok", .{});

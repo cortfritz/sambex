@@ -11,9 +11,11 @@ services:
       - -u
       - "example2;badpass"
       - -s
-      - "public;/share;no;no;yes;all;none;example1;public"
+      - "public;/share;no;no;yes;example1;none;none;public share"
       - -s
-      - "private;/share-2;no;no;no;all;none;none;private"
+      - "private;/share-2;no;no;no;example2;none;none;private share"
+      - -g
+      - "vfs objects = "
     volumes:
       - ./tmp/share:/share
       - ./tmp/share-2:/share-2

@@ -24,8 +24,8 @@ defmodule Sambex do
     - password: Password for authentication
 
   ## Examples
-      iex> Sambex.connect("smb://192.168.1.100/share", "user", "pass")
-      :ok
+      Sambex.connect("smb://192.168.1.100/share", "user", "pass")
+      # => :ok
   """
   def connect(url, username, password) when is_binary(url) do
     Nif.connect(url, username, password)
@@ -43,8 +43,8 @@ defmodule Sambex do
     {:ok, [{filename, :file | :directory}, ...]} or {:error, reason}
 
   ## Examples
-      iex> Sambex.list_dir("smb://192.168.1.100/share", "user", "pass")
-      {:ok, [{"file.txt", :file}, {"folder", :directory}]}
+      Sambex.list_dir("smb://192.168.1.100/share", "user", "pass")
+      # => {:ok, [{"file.txt", :file}, {"folder", :directory}]}
   """
   def list_dir(url, username, password) when is_binary(url) do
     Nif.list_dir(url, username, password)
