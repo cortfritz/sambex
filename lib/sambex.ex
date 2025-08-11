@@ -98,6 +98,32 @@ defmodule Sambex do
   end
 
   @doc """
+  Move/rename a file on an SMB share.
+
+  ## Parameters
+    - source_url: SMB URL to the source file (e.g., "smb://server/share/old_file.txt")
+    - dest_url: SMB URL to the destination file (e.g., "smb://server/share/new_file.txt")
+    - username: Username for authentication
+    - password: Password for authentication
+
+  ## Returns
+    :ok or {:error, reason}
+
+  ## Examples
+      # Rename a file in the same directory
+      Sambex.move_file("smb://192.168.1.100/share/old.txt", "smb://192.168.1.100/share/new.txt", "user", "pass")
+      # => :ok
+
+      # Move a file to a different directory
+      Sambex.move_file("smb://192.168.1.100/share/file.txt", "smb://192.168.1.100/share/folder/file.txt", "user", "pass")
+      # => :ok
+  """
+  def move_file(source_url, dest_url, username, password)
+      when is_binary(source_url) and is_binary(dest_url) do
+    Nif.move_file(source_url, dest_url, username, password)
+  end
+
+  @doc """
   High-level function to copy a local file to an SMB share.
   """
   def upload_file(local_path, smb_url, username, password) do

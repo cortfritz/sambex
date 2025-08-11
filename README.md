@@ -25,6 +25,7 @@ A: Thanks for doing QA - please report any issues on GitHub.
 - Read files from SMB shares
 - Write/create files on SMB shares
 - **Delete files from SMB shares** (now working!)
+- **Move/rename files on SMB shares** (new!)
 - Upload local files to SMB shares
 - Download files from SMB shares
 
@@ -74,6 +75,9 @@ iex> Sambex.read_file("smb://localhost:445/private/thing", "example2", "badpass"
 
 iex> Sambex.write_file("smb://localhost:445/private/thing2", "some content", "example2", "badpass")
 {:ok, 12}
+
+iex> Sambex.move_file("smb://localhost:445/private/old_name.txt", "smb://localhost:445/private/new_name.txt", "example2", "badpass")
+:ok
 ```
 
 ## Testing
@@ -137,6 +141,7 @@ For detailed testing information, see [test/README.md](test/README.md).
 - [x] Read files
 - [x] Write/create files
 - [x] Delete files
+- [x] Move/rename files
 - [x] Upload local files
 - [x] Download files
 - [x] Authentication support
@@ -147,7 +152,6 @@ For detailed testing information, see [test/README.md](test/README.md).
 - [ ] Create directory
 - [ ] Rename directory
 - [ ] Delete directory
-- [ ] Rename file
 - [ ] Get file info/metadata
 - [ ] Set file permissions
 - [ ] Symbolic link support

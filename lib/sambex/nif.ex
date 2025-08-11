@@ -482,5 +482,76 @@ defmodule Sambex.Nif do
 
       return beam.make_into_atom("ok", .{});
   }
+
+  /// Move/rename file on SMB share
+  pub fn move_file(source_url: []const u8, dest_url: []const u8, username: []const u8, password: []const u8) beam.term {
+      var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+      defer arena.deinit();
+      const allocator = arena.allocator();
+
+      // Create SMB context
+      const ctx = c.smbc_new_context();
+      if (ctx == null) {
+          const error_atom = beam.make_error_atom(.{});
+          const context_error_atom = beam.make_into_atom("context_creation_failed", .{});
+          return beam.make(.{error_atom, context_error_atom}, .{});
+      }
+      defer _ = c.smbc_free_context(ctx, 0);
+
+      // Initialize context
+      if (c.smbc_init_context(ctx) == null) {
+          const error_atom = beam.make_error_atom(.{});
+          const init_error_atom = beam.make_into_atom("context_init_failed", .{});
+          return beam.make(.{error_atom, init_error_atom}, .{});
+      }
+
+      // Set authentication callback
+      c.smbc_setFunctionAuthData(ctx, auth_callback);
+
+      // Set credentials
+      if (username.len >= global_username.len or password.len >= global_password.len) {
+          const error_atom = beam.make_error_atom(.{});
+          const creds_error_atom = beam.make_into_atom("credentials_too_long", .{});
+          return beam.make(.{error_atom, creds_error_atom}, .{});
+      }
+
+      @memcpy(global_workgroup[0..9], "WORKGROUP");
+      global_workgroup[9] = 0;
+
+      @memcpy(global_username[0..username.len], username);
+      global_username[username.len] = 0;
+
+      @memcpy(global_password[0..password.len], password);
+      global_password[password.len] = 0;
+
+      credentials_set = true;
+
+      const source_cstr = allocator.dupeZ(u8, source_url) catch {
+          const error_atom = beam.make_error_atom(.{});
+          const memory_error_atom = beam.make_into_atom("memory_error", .{});
+          return beam.make(.{error_atom, memory_error_atom}, .{});
+      };
+
+      const dest_cstr = allocator.dupeZ(u8, dest_url) catch {
+          const error_atom = beam.make_error_atom(.{});
+          const memory_error_atom = beam.make_into_atom("memory_error", .{});
+          return beam.make(.{error_atom, memory_error_atom}, .{});
+      };
+
+      // Set the context as current for libsmbclient
+      const old_ctx = c.smbc_set_context(ctx);
+      defer _ = c.smbc_set_context(old_ctx);
+
+      // Rename/move the file using the proper context
+      const result = c.smbc_rename(source_cstr.ptr, dest_cstr.ptr);
+      if (result < 0) {
+          const error_atom = beam.make_error_atom(.{});
+          const move_failed_atom = beam.make_into_atom("move_failed", .{});
+          const result_term = beam.make(result, .{});
+          return beam.make(.{error_atom, move_failed_atom, result_term}, .{});
+      }
+
+      return beam.make_into_atom("ok", .{});
+  }
   """
 end

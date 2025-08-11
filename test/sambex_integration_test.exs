@@ -359,4 +359,114 @@ defmodule SambexIntegrationTest do
       assert :ok = Sambex.delete_file(large_file, @username, @password)
     end
   end
+
+  describe "file moving and renaming" do
+    test "move_file/4 successfully renames file in same directory", %{
+      test_file: test_file,
+      test_content: test_content,
+      timestamp: timestamp
+    } do
+      # Create original file
+      assert {:ok, _} = Sambex.write_file(test_file, test_content, @username, @password)
+
+      # Define new filename in same directory
+      renamed_file = "#{@test_share}/renamed_#{timestamp}.txt"
+
+      # Move/rename the file
+      assert :ok = Sambex.move_file(test_file, renamed_file, @username, @password)
+
+      # Verify original file no longer exists
+      assert {:error, _reason} = Sambex.read_file(test_file, @username, @password)
+
+      # Verify new file exists with correct content
+      assert {:ok, ^test_content} = Sambex.read_file(renamed_file, @username, @password)
+
+      # Cleanup
+      Sambex.delete_file(renamed_file, @username, @password)
+    end
+
+    test "move_file/4 fails for non-existent source file", %{timestamp: timestamp} do
+      nonexistent_file = "#{@test_share}/nonexistent_#{timestamp}.txt"
+      dest_file = "#{@test_share}/dest_#{timestamp}.txt"
+
+      # Should return error for non-existent source
+      result = Sambex.move_file(nonexistent_file, dest_file, @username, @password)
+      assert match?({:error, _}, result) or match?({:error, _, _}, result)
+    end
+
+    test "move_file/4 fails with wrong credentials", %{
+      test_file: test_file,
+      test_content: test_content,
+      timestamp: timestamp
+    } do
+      # Create original file
+      assert {:ok, _} = Sambex.write_file(test_file, test_content, @username, @password)
+
+      dest_file = "#{@test_share}/dest_#{timestamp}.txt"
+
+      # Try to move with wrong credentials
+      result = Sambex.move_file(test_file, dest_file, "wrong_user", "wrong_pass")
+      assert match?({:error, _}, result) or match?({:error, _, _}, result)
+
+      # Verify original file still exists
+      assert {:ok, ^test_content} = Sambex.read_file(test_file, @username, @password)
+
+      # Cleanup
+      Sambex.delete_file(test_file, @username, @password)
+    end
+
+    test "move_file/4 overwrites existing destination file", %{
+      test_content: test_content,
+      timestamp: timestamp
+    } do
+      source_file = "#{@test_share}/source_#{timestamp}.txt"
+      dest_file = "#{@test_share}/dest_#{timestamp}.txt"
+      dest_content = "Destination content"
+
+      # Create both source and destination files
+      assert {:ok, _} = Sambex.write_file(source_file, test_content, @username, @password)
+      assert {:ok, _} = Sambex.write_file(dest_file, dest_content, @username, @password)
+
+      # Move source to destination (should overwrite)
+      assert :ok = Sambex.move_file(source_file, dest_file, @username, @password)
+
+      # Verify source no longer exists
+      assert {:error, _reason} = Sambex.read_file(source_file, @username, @password)
+
+      # Verify destination has source content
+      assert {:ok, ^test_content} = Sambex.read_file(dest_file, @username, @password)
+
+      # Cleanup
+      Sambex.delete_file(dest_file, @username, @password)
+    end
+
+    test "move_file/4 updates directory listing correctly", %{
+      test_file: test_file,
+      test_content: test_content,
+      timestamp: timestamp
+    } do
+      # Create original file
+      assert {:ok, _} = Sambex.write_file(test_file, test_content, @username, @password)
+
+      # Get directory listing before move
+      assert {:ok, files_before} = Sambex.list_dir(@test_share, @username, @password)
+      original_filename = "test_#{timestamp}.txt"
+      assert Enum.any?(files_before, fn {name, _type} -> name == original_filename end)
+
+      # Move to new name
+      renamed_file = "#{@test_share}/moved_#{timestamp}.txt"
+      assert :ok = Sambex.move_file(test_file, renamed_file, @username, @password)
+
+      # Get directory listing after move
+      assert {:ok, files_after} = Sambex.list_dir(@test_share, @username, @password)
+      new_filename = "moved_#{timestamp}.txt"
+
+      # Verify original name is gone and new name exists
+      refute Enum.any?(files_after, fn {name, _type} -> name == original_filename end)
+      assert Enum.any?(files_after, fn {name, _type} -> name == new_filename end)
+
+      # Cleanup
+      Sambex.delete_file(renamed_file, @username, @password)
+    end
+  end
 end
