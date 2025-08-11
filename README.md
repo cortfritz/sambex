@@ -50,7 +50,7 @@ in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:sambex, "~> 0.1.0-alpha2"}
+    {:sambex, "~> 0.1.0"}
   ]
 end
 ```
@@ -137,7 +137,7 @@ For detailed testing information, see [test/README.md](test/README.md).
 
 ### ✅ Completed Features
 - [x] Connect to SMB shares
-- [x] List directory contents  
+- [x] List directory contents
 - [x] Read files
 - [x] Write/create files
 - [x] Delete files
