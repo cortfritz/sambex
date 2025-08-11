@@ -12,7 +12,8 @@ defmodule Sambex.MixProject do
       description: description(),
       package: package(),
       source_url: "https://github.com/wearecococo/sambex",
-      homepage_url: "https://wearecococo.com"
+      homepage_url: "https://wearecococo.com",
+      docs: docs()
     ]
   end
 
@@ -40,6 +41,13 @@ defmodule Sambex.MixProject do
       name: "sambex",
       licenses: ["MIT"],
       links: %{"GitHub" => "https://github.com/wearecococo/sambex"}
+    ]
+  end
+
+  defp docs do
+    [
+      main: "Sambex",
+      extras: ["README.md"]
     ]
   end
 end
