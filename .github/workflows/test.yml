@@ -1,0 +1,373 @@
+name: Test
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+env:
+  MIX_ENV: test
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        elixir: ['1.17', '1.18']
+        otp: ['26', '27']
+        exclude:
+          # OTP 27 requires Elixir 1.17+
+          - elixir: '1.16'
+            otp: '27'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: ${{ matrix.elixir }}
+        otp-version: ${{ matrix.otp }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libsmbclient-dev \
+          smbclient \
+          build-essential \
+          cmake
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('**/mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-
+          ${{ runner.os }}-mix-
+
+    - name: Install dependencies
+      run: mix deps.get
+
+    - name: Check formatting
+      run: mix format --check-formatted
+
+    - name: Compile code
+      run: mix compile --warnings-as-errors
+
+    - name: Run unit tests
+      run: mix test --exclude integration
+      env:
+        SKIP_INTEGRATION: "true"
+
+    - name: Generate docs
+      run: mix docs
+      if: matrix.elixir == '1.18' && matrix.otp == '27'
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    services:
+      samba:
+        image: dperson/samba
+        ports:
+          - 139:139
+          - 445:445
+        options: >-
+          --health-cmd "smbclient -L localhost -N || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 30s
+        env:
+          TZ: UTC
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.18'
+        otp-version: '27'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libsmbclient-dev \
+          smbclient \
+          build-essential \
+          cmake
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-integration-${{ hashFiles('**/mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-mix-integration-
+          ${{ runner.os }}-mix-
+
+    - name: Install dependencies
+      run: mix deps.get
+
+    - name: Compile code
+      run: mix compile
+
+    - name: Configure Samba server
+      run: |
+        # Wait for Samba service to be ready
+        timeout 60 bash -c 'until nc -z localhost 445; do sleep 1; done'
+
+        # Configure Samba with our test users and shares
+        docker exec $(docker ps -q --filter ancestor=dperson/samba) bash -c "
+          samba.sh -u 'example1;badpass' && \
+          samba.sh -u 'example2;badpass' && \
+          samba.sh -s 'public;/tmp/public;no;no;yes;example1;none;none;public share' && \
+          samba.sh -s 'private;/tmp/private;no;no;no;example2;none;none;private share' && \
+          samba.sh -g 'vfs objects = ' && \
+          mkdir -p /tmp/public /tmp/private && \
+          chmod 777 /tmp/public /tmp/private && \
+          supervisorctl restart smbd
+        "
+
+    - name: Wait for Samba configuration
+      run: |
+        sleep 10
+        # Test SMB connection
+        timeout 30 bash -c 'until smbclient //localhost/public -U example1%badpass -c "ls" 2>/dev/null; do
+          echo "Waiting for SMB server...";
+          sleep 2;
+        done'
+
+    - name: Verify SMB server
+      run: |
+        echo "Testing SMB connectivity..."
+        smbclient //localhost/public -U example1%badpass -c "ls"
+        echo "SMB server is ready!"
+
+    - name: Run integration tests
+      run: mix test --only integration
+      timeout-minutes: 10
+
+    - name: Run all tests
+      run: mix test
+      timeout-minutes: 10
+
+  coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    if: github.event_name == 'push'
+
+    services:
+      samba:
+        image: dperson/samba
+        ports:
+          - 139:139
+          - 445:445
+        options: >-
+          --health-cmd "smbclient -L localhost -N || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 30s
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.18'
+        otp-version: '27'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libsmbclient-dev \
+          smbclient \
+          build-essential \
+          cmake
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-coverage-${{ hashFiles('**/mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-mix-coverage-
+          ${{ runner.os }}-mix-
+
+    - name: Install dependencies
+      run: mix deps.get
+
+    - name: Compile code
+      run: mix compile
+
+    - name: Configure Samba server
+      run: |
+        timeout 60 bash -c 'until nc -z localhost 445; do sleep 1; done'
+        docker exec $(docker ps -q --filter ancestor=dperson/samba) bash -c "
+          samba.sh -u 'example1;badpass' && \
+          samba.sh -u 'example2;badpass' && \
+          samba.sh -s 'public;/tmp/public;no;no;yes;example1;none;none;public share' && \
+          samba.sh -s 'private;/tmp/private;no;no;no;example2;none;none;private share' && \
+          samba.sh -g 'vfs objects = ' && \
+          mkdir -p /tmp/public /tmp/private && \
+          chmod 777 /tmp/public /tmp/private && \
+          supervisorctl restart smbd
+        "
+        sleep 10
+        smbclient //localhost/public -U example1%badpass -c "ls"
+
+    - name: Run tests with coverage
+      run: mix test --cover
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Generate coverage report
+      run: mix coveralls.github
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      continue-on-error: true
+
+  quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.18'
+        otp-version: '27'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libsmbclient-dev \
+          build-essential \
+          cmake
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-quality-${{ hashFiles('**/mix.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-mix-quality-
+          ${{ runner.os }}-mix-
+
+    - name: Install dependencies
+      run: mix deps.get
+
+    - name: Compile code (dev)
+      run: MIX_ENV=dev mix compile
+
+    - name: Check unused dependencies
+      run: mix deps.unlock --check-unused
+
+    - name: Security audit
+      run: mix deps.audit
+
+    - name: Run Credo
+      run: mix credo --strict
+      continue-on-error: true
+
+    - name: Run Dialyzer
+      run: mix dialyzer
+      continue-on-error: true
+
+  release-check:
+    name: Release Check
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.18'
+        otp-version: '27'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libsmbclient-dev \
+          build-essential \
+          cmake
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          deps
+          _build
+        key: ${{ runner.os }}-mix-prod-${{ hashFiles('**/mix.lock') }}
+
+    - name: Install dependencies
+      run: mix deps.get
+
+    - name: Build release
+      run: MIX_ENV=prod mix compile
+
+    - name: Check hex package
+      run: mix hex.build
+      continue-on-error: true
+
+  notify:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, coverage, quality]
+    if: always()
+
+    steps:
+    - name: Check overall status
+      run: |
+        if [[ "${{ needs.unit-tests.result }}" == "success" && "${{ needs.integration-tests.result }}" == "success" ]]; then
+          echo "✅ All tests passed! SMB client is working correctly."
+          echo "STATUS=success" >> $GITHUB_ENV
+        else
+          echo "❌ Some tests failed. Check the job outputs above."
+          echo "STATUS=failure" >> $GITHUB_ENV
+          exit 1
+        fi
+
+    - name: Success notification
+      if: env.STATUS == 'success'
+      run: |
+        echo "🎉 Sambex CI/CD Pipeline Complete!"
+        echo "✅ Unit tests: ${{ needs.unit-tests.result }}"
+        echo "✅ Integration tests: ${{ needs.integration-tests.result }}"
+        echo "📊 Coverage: ${{ needs.coverage.result }}"
+        echo "🔍 Quality: ${{ needs.quality.result }}"

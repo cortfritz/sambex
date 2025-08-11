@@ -151,3 +151,75 @@ For detailed testing information, see [test/README.md](test/README.md).
 - [ ] Get file info/metadata
 - [ ] Set file permissions
 - [ ] Symbolic link support
+
+## CI/CD
+
+Sambex includes comprehensive GitHub Actions workflows for continuous integration and deployment.
+
+### Automated Testing
+
+Every push and pull request triggers:
+
+- **Unit Tests**: Fast tests without external dependencies
+- **Integration Tests**: Full SMB operations against real server
+- **Code Quality**: Credo static analysis and formatting checks
+- **Coverage**: Test coverage reporting
+- **Multi-version**: Tests across Elixir 1.17-1.18 and OTP 26-27
+
+### GitHub Actions Workflows
+
+#### Main CI Workflow (`.github/workflows/ci.yml`)
+```yaml
+# Triggered on push/PR to main branches
+- Unit tests (all Elixir/OTP combinations)
+- Integration tests with Docker Samba server
+- Code formatting and quality checks
+- Coverage reporting
+- Release build verification
+```
+
+#### Comprehensive Test Workflow (`.github/workflows/test.yml`)
+```yaml
+# More detailed testing pipeline
+- Separate unit and integration test jobs
+- Detailed SMB server configuration
+- Coverage analysis with Coveralls
+- Code quality with Credo and Dialyzer
+- Release verification
+```
+
+### Running Locally
+
+Test the same pipeline locally:
+
+```bash
+# Run the same checks as CI
+mix format --check-formatted
+mix compile --warnings-as-errors
+mix test
+mix credo --strict
+mix docs
+
+# With coverage
+mix test --cover
+```
+
+### CI Environment Setup
+
+The CI automatically:
+1. Installs Elixir/OTP and system dependencies
+2. Starts Docker Samba server with test configuration
+3. Configures users and shares for testing
+4. Runs comprehensive test suite
+5. Reports results and coverage
+
+### Contributing
+
+All contributions must pass CI checks:
+- [ ] All tests pass
+- [ ] Code formatting is correct
+- [ ] No new Credo warnings
+- [ ] Documentation is updated
+- [ ] Coverage is maintained
+
+See [.github/pull_request_template.md](.github/pull_request_template.md) for details.

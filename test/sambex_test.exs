@@ -94,7 +94,7 @@ defmodule SambexTest do
 
       # These would fail at runtime with FunctionClauseError
       assert_raise FunctionClauseError, fn ->
-        apply(Sambex, :list_dir, [123, "user", "pass"])
+        Sambex.list_dir(123, "user", "pass")
       end
     end
   end
