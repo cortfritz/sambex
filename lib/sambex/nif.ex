@@ -1,7 +1,5 @@
 defmodule Sambex.Nif do
-  @moduledoc """
-  Native functions for SMB client operations using Zigler.
-  """
+  @moduledoc false
 
   use Zig,
     otp_app: :sambex,
@@ -20,6 +18,7 @@ defmodule Sambex.Nif do
       @cInclude("stdlib.h");
       @cInclude("string.h");
       @cInclude("errno.h");
+      @cInclude("sys/stat.h");
   });
 
   // Global credentials storage
@@ -552,6 +551,118 @@ defmodule Sambex.Nif do
       }
 
       return beam.make_into_atom("ok", .{});
+  }
+
+  /// Get file statistics/metadata from SMB share
+  pub fn get_file_stats(url: []const u8, username: []const u8, password: []const u8) beam.term {
+      var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+      defer arena.deinit();
+      const allocator = arena.allocator();
+
+      // Create SMB context
+      const ctx = c.smbc_new_context();
+      if (ctx == null) {
+          const error_atom = beam.make_error_atom(.{});
+          const context_error_atom = beam.make_into_atom("context_creation_failed", .{});
+          return beam.make(.{error_atom, context_error_atom}, .{});
+      }
+      defer _ = c.smbc_free_context(ctx, 0);
+
+      // Initialize context
+      if (c.smbc_init_context(ctx) == null) {
+          const error_atom = beam.make_error_atom(.{});
+          const init_error_atom = beam.make_into_atom("context_init_failed", .{});
+          return beam.make(.{error_atom, init_error_atom}, .{});
+      }
+
+      // Set authentication callback
+      c.smbc_setFunctionAuthData(ctx, auth_callback);
+
+      // Set credentials
+      if (username.len >= global_username.len or password.len >= global_password.len) {
+          const error_atom = beam.make_error_atom(.{});
+          const creds_error_atom = beam.make_into_atom("credentials_too_long", .{});
+          return beam.make(.{error_atom, creds_error_atom}, .{});
+      }
+
+      @memcpy(global_workgroup[0..9], "WORKGROUP");
+      global_workgroup[9] = 0;
+
+      @memcpy(global_username[0..username.len], username);
+      global_username[username.len] = 0;
+
+      @memcpy(global_password[0..password.len], password);
+      global_password[password.len] = 0;
+
+      credentials_set = true;
+
+      const url_cstr = allocator.dupeZ(u8, url) catch {
+          const error_atom = beam.make_error_atom(.{});
+          const memory_error_atom = beam.make_into_atom("memory_error", .{});
+          return beam.make(.{error_atom, memory_error_atom}, .{});
+      };
+
+      // Set the context as current for libsmbclient
+      const old_ctx = c.smbc_set_context(ctx);
+      defer _ = c.smbc_set_context(old_ctx);
+
+      // Get file statistics
+      var stat_buf: c.struct_stat = undefined;
+      const result = c.smbc_stat(url_cstr.ptr, &stat_buf);
+      if (result < 0) {
+          const error_atom = beam.make_error_atom(.{});
+          const stat_failed_atom = beam.make_into_atom("stat_failed", .{});
+          const result_term = beam.make(result, .{});
+          return beam.make(.{error_atom, stat_failed_atom, result_term}, .{});
+      }
+
+      // Convert file mode to file type atom
+      const file_type_atom = if (c.S_ISREG(stat_buf.st_mode))
+          beam.make_into_atom("file", .{})
+      else if (c.S_ISDIR(stat_buf.st_mode))
+          beam.make_into_atom("directory", .{})
+      else if (c.S_ISLNK(stat_buf.st_mode))
+          beam.make_into_atom("symlink", .{})
+      else
+          beam.make_into_atom("other", .{});
+
+      // Create a map with file statistics
+      const ok_atom = beam.make_into_atom("ok", .{});
+      const size_atom = beam.make_into_atom("size", .{});
+      const type_atom = beam.make_into_atom("type", .{});
+      const mode_atom = beam.make_into_atom("mode", .{});
+      const atime_atom = beam.make_into_atom("access_time", .{});
+      const mtime_atom = beam.make_into_atom("modification_time", .{});
+      const ctime_atom = beam.make_into_atom("change_time", .{});
+      const uid_atom = beam.make_into_atom("uid", .{});
+      const gid_atom = beam.make_into_atom("gid", .{});
+      const links_atom = beam.make_into_atom("links", .{});
+
+      const size_term = beam.make(@as(i64, @intCast(stat_buf.st_size)), .{});
+      const mode_term = beam.make(@as(i32, @intCast(stat_buf.st_mode & 0o7777)), .{});
+      const atime_term = beam.make(@as(i64, @intCast(stat_buf.st_atimespec.tv_sec)), .{});
+      const mtime_term = beam.make(@as(i64, @intCast(stat_buf.st_mtimespec.tv_sec)), .{});
+      const ctime_term = beam.make(@as(i64, @intCast(stat_buf.st_ctimespec.tv_sec)), .{});
+      const uid_term = beam.make(@as(i32, @intCast(stat_buf.st_uid)), .{});
+      const gid_term = beam.make(@as(i32, @intCast(stat_buf.st_gid)), .{});
+      const links_term = beam.make(@as(i32, @intCast(stat_buf.st_nlink)), .{});
+
+      // Create a map using individual key-value pairs
+      var map_entries = [_]beam.term{
+          size_atom, size_term,
+          type_atom, file_type_atom,
+          mode_atom, mode_term,
+          atime_atom, atime_term,
+          mtime_atom, mtime_term,
+          ctime_atom, ctime_term,
+          uid_atom, uid_term,
+          gid_atom, gid_term,
+          links_atom, links_term
+      };
+
+      const stats_map = beam.make(map_entries[0..], .{map_entries.len / 2});
+
+      return beam.make(.{ok_atom, stats_map}, .{});
   }
   """
 end

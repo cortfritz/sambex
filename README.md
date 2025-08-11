@@ -1,3 +1,5 @@
+[![HexDocs](https://img.shields.io/badge/docs-latest-blue)](https://hexdocs.pm/sambex)
+
 # Sambex
 
 Sambex is a library for interacting with SMB (Server Message Block) shares in Elixir.
@@ -26,6 +28,7 @@ A: Thanks for doing QA - please report any issues on GitHub.
 - Write/create files on SMB shares
 - **Delete files from SMB shares** (now working!)
 - **Move/rename files on SMB shares** (new!)
+- **Get file metadata/statistics** (new!)
 - Upload local files to SMB shares
 - Download files from SMB shares
 
@@ -50,7 +53,7 @@ in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:sambex, "~> 0.1.0"}
+    {:sambex, "~> 0.1.1"}
   ]
 end
 ```
@@ -78,6 +81,9 @@ iex> Sambex.write_file("smb://localhost:445/private/thing2", "some content", "ex
 
 iex> Sambex.move_file("smb://localhost:445/private/old_name.txt", "smb://localhost:445/private/new_name.txt", "example2", "badpass")
 :ok
+
+iex> Sambex.get_file_stats("smb://localhost:445/private/thing", "example2", "badpass")
+{:ok, %{size: 5, type: :file, mode: 420, access_time: 1754953764, modification_time: 1754953764, change_time: 1754953764, uid: 501, gid: 20, links: 1}}
 ```
 
 ## Testing
@@ -142,6 +148,7 @@ For detailed testing information, see [test/README.md](test/README.md).
 - [x] Write/create files
 - [x] Delete files
 - [x] Move/rename files
+- [x] Get file metadata/statistics
 - [x] Upload local files
 - [x] Download files
 - [x] Authentication support
@@ -152,7 +159,6 @@ For detailed testing information, see [test/README.md](test/README.md).
 - [ ] Create directory
 - [ ] Rename directory
 - [ ] Delete directory
-- [ ] Get file info/metadata
 - [ ] Set file permissions
 - [ ] Symbolic link support
 

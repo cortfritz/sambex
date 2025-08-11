@@ -469,4 +469,162 @@ defmodule SambexIntegrationTest do
       Sambex.delete_file(renamed_file, @username, @password)
     end
   end
+
+  describe "file metadata and statistics" do
+    test "get_file_stats/3 returns correct metadata for regular file", %{
+      test_file: test_file,
+      test_content: test_content
+    } do
+      # Create test file
+      assert {:ok, _} = Sambex.write_file(test_file, test_content, @username, @password)
+
+      # Get file stats
+      assert {:ok, stats} = Sambex.get_file_stats(test_file, @username, @password)
+
+      # Verify required fields are present
+      assert Map.has_key?(stats, :size)
+      assert Map.has_key?(stats, :type)
+      assert Map.has_key?(stats, :mode)
+      assert Map.has_key?(stats, :access_time)
+      assert Map.has_key?(stats, :modification_time)
+      assert Map.has_key?(stats, :change_time)
+      assert Map.has_key?(stats, :uid)
+      assert Map.has_key?(stats, :gid)
+      assert Map.has_key?(stats, :links)
+
+      # Verify specific values
+      assert stats.size == byte_size(test_content)
+      assert stats.type == :file
+      assert is_integer(stats.mode)
+      assert is_integer(stats.access_time)
+      assert is_integer(stats.modification_time)
+      assert is_integer(stats.change_time)
+      assert is_integer(stats.uid)
+      assert is_integer(stats.gid)
+      assert is_integer(stats.links)
+
+      # Verify timestamps are reasonable (within last hour)
+      current_time = :os.system_time(:second)
+      assert stats.modification_time > current_time - 3600
+      assert stats.modification_time <= current_time
+
+      # Cleanup
+      Sambex.delete_file(test_file, @username, @password)
+    end
+
+    test "get_file_stats/3 returns correct metadata for directory" do
+      # Get stats for the test share directory
+      assert {:ok, stats} = Sambex.get_file_stats(@test_share, @username, @password)
+
+      # Verify it's identified as a directory
+      assert stats.type == :directory
+      assert is_integer(stats.size)
+      assert is_integer(stats.mode)
+
+      # Directory should have appropriate permissions
+      assert stats.mode > 0
+    end
+
+    test "get_file_stats/3 fails for non-existent file", %{timestamp: timestamp} do
+      nonexistent_file = "#{@test_share}/nonexistent_#{timestamp}.txt"
+
+      # Should return error for non-existent file
+      result = Sambex.get_file_stats(nonexistent_file, @username, @password)
+      assert match?({:error, _}, result) or match?({:error, _, _}, result)
+    end
+
+    test "get_file_stats/3 fails with wrong credentials", %{
+      test_file: test_file,
+      test_content: test_content
+    } do
+      # Create test file
+      assert {:ok, _} = Sambex.write_file(test_file, test_content, @username, @password)
+
+      # Try to get stats with wrong credentials
+      result = Sambex.get_file_stats(test_file, "wrong_user", "wrong_pass")
+      assert match?({:error, _}, result) or match?({:error, _, _}, result)
+
+      # Cleanup
+      Sambex.delete_file(test_file, @username, @password)
+    end
+
+    test "get_file_stats/3 shows size changes after file modification", %{
+      test_file: test_file,
+      test_content: test_content
+    } do
+      # Create initial file
+      assert {:ok, _} = Sambex.write_file(test_file, test_content, @username, @password)
+
+      # Get initial stats
+      assert {:ok, initial_stats} = Sambex.get_file_stats(test_file, @username, @password)
+      assert initial_stats.size == byte_size(test_content)
+
+      # Modify file with longer content
+      longer_content = test_content <> " - additional content"
+      assert {:ok, _} = Sambex.write_file(test_file, longer_content, @username, @password)
+
+      # Get updated stats
+      assert {:ok, updated_stats} = Sambex.get_file_stats(test_file, @username, @password)
+      assert updated_stats.size == byte_size(longer_content)
+      assert updated_stats.size > initial_stats.size
+
+      # Modification time should be updated
+      assert updated_stats.modification_time >= initial_stats.modification_time
+
+      # Cleanup
+      Sambex.delete_file(test_file, @username, @password)
+    end
+
+    test "get_file_stats/3 works with empty files", %{timestamp: timestamp} do
+      empty_file = "#{@test_share}/empty_#{timestamp}.txt"
+
+      # Create empty file
+      assert {:ok, 0} = Sambex.write_file(empty_file, "", @username, @password)
+
+      # Get stats for empty file
+      assert {:ok, stats} = Sambex.get_file_stats(empty_file, @username, @password)
+      assert stats.size == 0
+      assert stats.type == :file
+
+      # Cleanup
+      Sambex.delete_file(empty_file, @username, @password)
+    end
+
+    test "get_file_stats/3 works with binary files", %{timestamp: timestamp} do
+      binary_file = "#{@test_share}/binary_#{timestamp}.bin"
+      binary_content = <<0, 1, 2, 3, 255, 254, 253>>
+
+      # Create binary file
+      assert {:ok, _} = Sambex.write_file(binary_file, binary_content, @username, @password)
+
+      # Get stats for binary file
+      assert {:ok, stats} = Sambex.get_file_stats(binary_file, @username, @password)
+      assert stats.size == byte_size(binary_content)
+      assert stats.type == :file
+
+      # Cleanup
+      Sambex.delete_file(binary_file, @username, @password)
+    end
+
+    test "get_file_stats/3 file type detection works correctly", %{
+      test_file: test_file,
+      test_content: test_content
+    } do
+      # Test regular file
+      assert {:ok, _} = Sambex.write_file(test_file, test_content, @username, @password)
+      assert {:ok, file_stats} = Sambex.get_file_stats(test_file, @username, @password)
+      assert file_stats.type == :file
+
+      # Test directory (use the share root)
+      assert {:ok, dir_stats} = Sambex.get_file_stats(@test_share, @username, @password)
+      assert dir_stats.type == :directory
+
+      # Verify different types have different characteristics
+      assert file_stats.size == byte_size(test_content)
+      assert dir_stats.size != file_stats.size
+
+      # Cleanup
+      Sambex.delete_file(test_file, @username, @password)
+    end
+  end
 end

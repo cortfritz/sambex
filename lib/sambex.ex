@@ -124,6 +124,49 @@ defmodule Sambex do
   end
 
   @doc """
+  Get file statistics/metadata from an SMB share.
+
+  ## Parameters
+    - url: SMB URL to the file (e.g., "smb://server/share/file.txt")
+    - username: Username for authentication
+    - password: Password for authentication
+
+  ## Returns
+    {:ok, stats_map} or {:error, reason}
+
+    The stats_map contains:
+    - `:size` - File size in bytes
+    - `:type` - File type (`:file`, `:directory`, `:symlink`, `:other`)
+    - `:mode` - File permissions (octal mode)
+    - `:access_time` - Last access time (Unix timestamp)
+    - `:modification_time` - Last modification time (Unix timestamp)
+    - `:change_time` - Last status change time (Unix timestamp)
+    - `:uid` - User ID of owner
+    - `:gid` - Group ID of owner
+    - `:links` - Number of hard links
+
+  ## Examples
+      Sambex.get_file_stats("smb://192.168.1.100/share/file.txt", "user", "pass")
+      # => {:ok, %{size: 1024, type: :file, mode: 644, ...}}
+  """
+  def get_file_stats(url, username, password) when is_binary(url) do
+    case Nif.get_file_stats(url, username, password) do
+      {:ok, flat_list} ->
+        {:ok, flat_list_to_map(flat_list)}
+
+      error ->
+        error
+    end
+  end
+
+  # Helper function to convert flat list [:key1, val1, :key2, val2, ...] to map
+  defp flat_list_to_map(flat_list) do
+    flat_list
+    |> Enum.chunk_every(2)
+    |> Enum.into(%{}, fn [key, value] -> {key, value} end)
+  end
+
+  @doc """
   High-level function to copy a local file to an SMB share.
   """
   def upload_file(local_path, smb_url, username, password) do

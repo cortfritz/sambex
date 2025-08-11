@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1]
+
+### Added
+
+- **File Statistics/Metadata Functionality**: Added `get_file_stats/3` function to get file metadata from SMB shares
+  - Returns comprehensive file information including size, type, permissions, timestamps
+  - Supports both files and directories
+  - Cross-platform compatibility (macOS stat structure handling)
+  - Proper error handling for non-existent files and authentication failures
+  - Comprehensive test coverage with 8 new integration tests
+
+### Changed
+
+- Updated README.md to include file stats documentation
+- Updated roadmap to reflect completed file stats feature
+
+### Technical Details
+- Added `get_file_stats` function to Sambex.Nif module using `smbc_stat` from libsmbclient
+- Added corresponding Elixir wrappers with automatic data conversion
+- Enhanced sys/stat.h support for cross-platform compatibility
+- All tests pass (46 total tests, 0 failures)
+
 ## [0.1.0]
 
 ### Added
@@ -55,6 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Testing
 - Unit tests for module structure and function exports
 - Integration tests against real SMB server
+- File statistics and metadata validation tests
+- File move/rename operation tests
 - Error handling tests for edge cases
 - Performance tests for large files
 - Unicode and binary content tests

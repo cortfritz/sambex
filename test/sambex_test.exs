@@ -23,6 +23,7 @@ defmodule SambexTest do
         {:write_file, 4},
         {:delete_file, 3},
         {:move_file, 4},
+        {:get_file_stats, 3},
         {:upload_file, 4},
         {:download_file, 4}
       ]
