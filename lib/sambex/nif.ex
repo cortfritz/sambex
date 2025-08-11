@@ -21,9 +21,36 @@ defmodule Sambex.Nif do
       @cInclude("string.h");
   });
 
+  // Global credentials storage
+  var global_workgroup: [256]u8 = undefined;
+  var global_username: [256]u8 = undefined;
+  var global_password: [256]u8 = undefined;
+  var credentials_set: bool = false;
+
   // Authentication callback
-  fn auth_callback(_: [*c]const u8, _: [*c]const u8, _: [*c]u8, _: c_int, _: [*c]u8, _: c_int, _: [*c]u8, _: c_int) callconv(.C) void {
-      // This is a basic callback - authentication will be handled differently
+  fn auth_callback(srv: [*c]const u8, shr: [*c]const u8, workgroup: [*c]u8, workgroup_len: c_int, username: [*c]u8, username_len: c_int, password: [*c]u8, password_len: c_int) callconv(.C) void {
+      _ = srv;
+      _ = shr;
+
+      if (!credentials_set) return;
+
+      // Copy workgroup
+      const max_wg_len = @as(usize, @intCast(workgroup_len - 1));
+      const wg_len = if (max_wg_len < global_workgroup.len - 1) max_wg_len else global_workgroup.len - 1;
+      @memcpy(workgroup[0..wg_len], global_workgroup[0..wg_len]);
+      workgroup[wg_len] = 0;
+
+      // Copy username
+      const max_user_len = @as(usize, @intCast(username_len - 1));
+      const user_len = if (max_user_len < global_username.len - 1) max_user_len else global_username.len - 1;
+      @memcpy(username[0..user_len], global_username[0..user_len]);
+      username[user_len] = 0;
+
+      // Copy password
+      const max_pass_len = @as(usize, @intCast(password_len - 1));
+      const pass_len = if (max_pass_len < global_password.len - 1) max_pass_len else global_password.len - 1;
+      @memcpy(password[0..pass_len], global_password[0..pass_len]);
+      password[pass_len] = 0;
   }
 
   /// Initialize SMB client
@@ -62,37 +89,26 @@ defmodule Sambex.Nif do
       return number + 1;
   }
 
-  /// Set global credentials (simplified approach)
+  /// Set global credentials
   pub fn set_credentials(workgroup: []const u8, username: []const u8, password: []const u8) beam.term {
-      var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-      defer arena.deinit();
-      const allocator = arena.allocator();
-
-      const workgroup_cstr = allocator.dupeZ(u8, workgroup) catch {
+      if (workgroup.len >= global_workgroup.len or username.len >= global_username.len or password.len >= global_password.len) {
           const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
-      const username_cstr = allocator.dupeZ(u8, username) catch {
-          const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
-      const password_cstr = allocator.dupeZ(u8, password) catch {
-          const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
-
-      const ctx = create_smb_context();
-      if (ctx == null) {
-          const error_atom = beam.make_error_atom(.{});
-          const context_failed_atom = beam.make_into_atom("context_init_failed", .{});
-          return beam.make(.{error_atom, context_failed_atom}, .{});
+          const too_long_atom = beam.make_into_atom("credentials_too_long", .{});
+          return beam.make(.{error_atom, too_long_atom}, .{});
       }
-      defer _ = c.smbc_free_context(ctx, @intCast(1));
 
-      c.smbc_set_credentials_with_fallback(ctx, workgroup_cstr.ptr, username_cstr.ptr, password_cstr.ptr);
+      // Store credentials in global variables
+      @memcpy(global_workgroup[0..workgroup.len], workgroup);
+      global_workgroup[workgroup.len] = 0;
+
+      @memcpy(global_username[0..username.len], username);
+      global_username[username.len] = 0;
+
+      @memcpy(global_password[0..password.len], password);
+      global_password[password.len] = 0;
+
+      credentials_set = true;
+
       return beam.make_into_atom("ok", .{});
   }
 
@@ -145,23 +161,27 @@ defmodule Sambex.Nif do
       }
       defer _ = c.smbc_free_context(ctx, @intCast(1));
 
-      const workgroup_cstr = allocator.dupeZ(u8, "WORKGROUP") catch {
+      // Store credentials for this operation
+      if (username.len >= global_username.len or password.len >= global_password.len) {
           const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
-      const username_cstr = allocator.dupeZ(u8, username) catch {
-          const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
-      const password_cstr = allocator.dupeZ(u8, password) catch {
-          const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
+          const too_long_atom = beam.make_into_atom("credentials_too_long", .{});
+          return beam.make(.{error_atom, too_long_atom}, .{});
+      }
 
-      c.smbc_set_credentials_with_fallback(ctx, workgroup_cstr.ptr, username_cstr.ptr, password_cstr.ptr);
+      @memcpy(global_username[0..username.len], username);
+      global_username[username.len] = 0;
+
+      @memcpy(global_password[0..password.len], password);
+      global_password[password.len] = 0;
+
+      // Set default workgroup if not already set
+      if (!credentials_set) {
+          const default_wg = "WORKGROUP";
+          @memcpy(global_workgroup[0..default_wg.len], default_wg);
+          global_workgroup[default_wg.len] = 0;
+      }
+
+      credentials_set = true;
 
       const url_cstr = allocator.dupeZ(u8, url) catch {
           const error_atom = beam.make_error_atom(.{});
@@ -194,23 +214,27 @@ defmodule Sambex.Nif do
       }
       defer _ = c.smbc_free_context(ctx, @intCast(1));
 
-      const workgroup_cstr = allocator.dupeZ(u8, "WORKGROUP") catch {
+      // Store credentials for this operation
+      if (username.len >= global_username.len or password.len >= global_password.len) {
           const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
-      const username_cstr = allocator.dupeZ(u8, username) catch {
-          const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
-      const password_cstr = allocator.dupeZ(u8, password) catch {
-          const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
+          const too_long_atom = beam.make_into_atom("credentials_too_long", .{});
+          return beam.make(.{error_atom, too_long_atom}, .{});
+      }
 
-      c.smbc_set_credentials_with_fallback(ctx, workgroup_cstr.ptr, username_cstr.ptr, password_cstr.ptr);
+      @memcpy(global_username[0..username.len], username);
+      global_username[username.len] = 0;
+
+      @memcpy(global_password[0..password.len], password);
+      global_password[password.len] = 0;
+
+      // Set default workgroup if not already set
+      if (!credentials_set) {
+          const default_wg = "WORKGROUP";
+          @memcpy(global_workgroup[0..default_wg.len], default_wg);
+          global_workgroup[default_wg.len] = 0;
+      }
+
+      credentials_set = true;
 
       const url_cstr = allocator.dupeZ(u8, url) catch {
           const error_atom = beam.make_error_atom(.{});
@@ -274,23 +298,27 @@ defmodule Sambex.Nif do
       }
       defer _ = c.smbc_free_context(ctx, @intCast(1));
 
-      const workgroup_cstr = allocator.dupeZ(u8, "WORKGROUP") catch {
+      // Store credentials for this operation
+      if (username.len >= global_username.len or password.len >= global_password.len) {
           const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
-      const username_cstr = allocator.dupeZ(u8, username) catch {
-          const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
-      const password_cstr = allocator.dupeZ(u8, password) catch {
-          const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
+          const too_long_atom = beam.make_into_atom("credentials_too_long", .{});
+          return beam.make(.{error_atom, too_long_atom}, .{});
+      }
 
-      c.smbc_set_credentials_with_fallback(ctx, workgroup_cstr.ptr, username_cstr.ptr, password_cstr.ptr);
+      @memcpy(global_username[0..username.len], username);
+      global_username[username.len] = 0;
+
+      @memcpy(global_password[0..password.len], password);
+      global_password[password.len] = 0;
+
+      // Set default workgroup if not already set
+      if (!credentials_set) {
+          const default_wg = "WORKGROUP";
+          @memcpy(global_workgroup[0..default_wg.len], default_wg);
+          global_workgroup[default_wg.len] = 0;
+      }
+
+      credentials_set = true;
 
       const url_cstr = allocator.dupeZ(u8, url) catch {
           const error_atom = beam.make_error_atom(.{});
@@ -348,23 +376,27 @@ defmodule Sambex.Nif do
       }
       defer _ = c.smbc_free_context(ctx, @intCast(1));
 
-      const workgroup_cstr = allocator.dupeZ(u8, "WORKGROUP") catch {
+      // Store credentials for this operation
+      if (username.len >= global_username.len or password.len >= global_password.len) {
           const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
-      const username_cstr = allocator.dupeZ(u8, username) catch {
-          const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
-      const password_cstr = allocator.dupeZ(u8, password) catch {
-          const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
+          const too_long_atom = beam.make_into_atom("credentials_too_long", .{});
+          return beam.make(.{error_atom, too_long_atom}, .{});
+      }
 
-      c.smbc_set_credentials_with_fallback(ctx, workgroup_cstr.ptr, username_cstr.ptr, password_cstr.ptr);
+      @memcpy(global_username[0..username.len], username);
+      global_username[username.len] = 0;
+
+      @memcpy(global_password[0..password.len], password);
+      global_password[password.len] = 0;
+
+      // Set default workgroup if not already set
+      if (!credentials_set) {
+          const default_wg = "WORKGROUP";
+          @memcpy(global_workgroup[0..default_wg.len], default_wg);
+          global_workgroup[default_wg.len] = 0;
+      }
+
+      credentials_set = true;
 
       const url_cstr = allocator.dupeZ(u8, url) catch {
           const error_atom = beam.make_error_atom(.{});
@@ -406,23 +438,27 @@ defmodule Sambex.Nif do
       }
       defer _ = c.smbc_free_context(ctx, @intCast(1));
 
-      const workgroup_cstr = allocator.dupeZ(u8, "WORKGROUP") catch {
+      // Store credentials for this operation
+      if (username.len >= global_username.len or password.len >= global_password.len) {
           const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
-      const username_cstr = allocator.dupeZ(u8, username) catch {
-          const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
-      const password_cstr = allocator.dupeZ(u8, password) catch {
-          const error_atom = beam.make_error_atom(.{});
-          const memory_error_atom = beam.make_into_atom("memory_error", .{});
-          return beam.make(.{error_atom, memory_error_atom}, .{});
-      };
+          const too_long_atom = beam.make_into_atom("credentials_too_long", .{});
+          return beam.make(.{error_atom, too_long_atom}, .{});
+      }
 
-      c.smbc_set_credentials_with_fallback(ctx, workgroup_cstr.ptr, username_cstr.ptr, password_cstr.ptr);
+      @memcpy(global_username[0..username.len], username);
+      global_username[username.len] = 0;
+
+      @memcpy(global_password[0..password.len], password);
+      global_password[password.len] = 0;
+
+      // Set default workgroup if not already set
+      if (!credentials_set) {
+          const default_wg = "WORKGROUP";
+          @memcpy(global_workgroup[0..default_wg.len], default_wg);
+          global_workgroup[default_wg.len] = 0;
+      }
+
+      credentials_set = true;
 
       const url_cstr = allocator.dupeZ(u8, url) catch {
           const error_atom = beam.make_error_atom(.{});

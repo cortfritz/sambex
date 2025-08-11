@@ -12,17 +12,13 @@ A: No. It's not ready yet.
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `sambex` to your list of dependencies in `mix.exs`:
+Sambex can be installed by adding `sambex` to your list of dependencies
+in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:sambex, "~> 0.1.0"}
+    {:sambex, "~> 0.1.0-alpha1"}
   ]
 end
 ```
-
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/sambex>.

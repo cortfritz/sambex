@@ -25,3 +25,5 @@ sambex-*.tar
 .Elixir.*.zig
 
 .elixir-tools/
+
+notes/

@@ -13,7 +13,7 @@ services:
       - -s
       - "public;/share;no;no;yes;all;none;example1;public"
       - -s
-      - "private;/share-2;no;no;no;example2;none;example2;private"
+      - "private;/share-2;no;no;no;all;none;none;private"
     volumes:
       - ./tmp/share:/share
       - ./tmp/share-2:/share-2
