@@ -71,6 +71,7 @@ defmodule Sambex.MixProject do
       source_url: "https://github.com/wearecococo/sambex",
       extras: [
         "guides/getting_started.md",
+        "guides/hot_folders.md",
         "guides/examples.md",
         "guides/cross_platform_building.md",
         "CHANGELOG.md",
@@ -83,6 +84,14 @@ defmodule Sambex.MixProject do
       groups_for_modules: [
         "Core API": [Sambex],
         "Connection API": [Sambex.Connection, Sambex.ConnectionSupervisor],
+        "Hot Folders": [
+          Sambex.HotFolder,
+          Sambex.HotFolder.Config,
+          Sambex.HotFolder.FileFilter,
+          Sambex.HotFolder.FileManager,
+          Sambex.HotFolder.Handler,
+          Sambex.HotFolder.StabilityChecker
+        ],
         Internal: [Sambex.Application, Sambex.Nif]
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md", "README.md"]
