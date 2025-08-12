@@ -1,11 +1,15 @@
 defmodule Sambex.Nif do
   @moduledoc false
 
+  # Detect system library paths for libsmbclient
+  @external_resource "lib/sambex/build_config.ex"
+  {{build_include_dirs, build_link_libs}, _bindings} = Code.eval_file("lib/sambex/build_config.ex")
+
   use Zig,
     otp_app: :sambex,
     c: [
-      include_dirs: ["/opt/homebrew/Cellar/samba/4.22.3/include"],
-      link_lib: "/opt/homebrew/Cellar/samba/4.22.3/lib/libsmbclient.dylib"
+      include_dirs: build_include_dirs,
+      link_lib: build_link_libs
     ]
 
   ~Z"""
@@ -640,9 +644,21 @@ defmodule Sambex.Nif do
 
       const size_term = beam.make(@as(i64, @intCast(stat_buf.st_size)), .{});
       const mode_term = beam.make(@as(i32, @intCast(stat_buf.st_mode & 0o7777)), .{});
-      const atime_term = beam.make(@as(i64, @intCast(stat_buf.st_atimespec.tv_sec)), .{});
-      const mtime_term = beam.make(@as(i64, @intCast(stat_buf.st_mtimespec.tv_sec)), .{});
-      const ctime_term = beam.make(@as(i64, @intCast(stat_buf.st_ctimespec.tv_sec)), .{});
+      // Handle timespec field differences between macOS and Linux
+      const atime_term = if (@hasField(@TypeOf(stat_buf), "st_atimespec"))
+          beam.make(@as(i64, @intCast(stat_buf.st_atimespec.tv_sec)), .{})
+      else
+          beam.make(@as(i64, @intCast(stat_buf.st_atim.tv_sec)), .{});
+      
+      const mtime_term = if (@hasField(@TypeOf(stat_buf), "st_mtimespec"))
+          beam.make(@as(i64, @intCast(stat_buf.st_mtimespec.tv_sec)), .{})
+      else
+          beam.make(@as(i64, @intCast(stat_buf.st_mtim.tv_sec)), .{});
+      
+      const ctime_term = if (@hasField(@TypeOf(stat_buf), "st_ctimespec"))
+          beam.make(@as(i64, @intCast(stat_buf.st_ctimespec.tv_sec)), .{})
+      else
+          beam.make(@as(i64, @intCast(stat_buf.st_ctim.tv_sec)), .{});
       const uid_term = beam.make(@as(i32, @intCast(stat_buf.st_uid)), .{});
       const gid_term = beam.make(@as(i32, @intCast(stat_buf.st_gid)), .{});
       const links_term = beam.make(@as(i32, @intCast(stat_buf.st_nlink)), .{});

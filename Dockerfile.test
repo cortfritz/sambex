@@ -1,0 +1,38 @@
+# Test Dockerfile for Sambex cross-platform compilation
+FROM elixir:1.18
+
+# Install build dependencies and Samba
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    git \
+    libsmbclient-dev \
+    curl \
+    wget \
+    ca-certificates \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Zigler will download Zig automatically during compilation
+
+# Set work directory
+WORKDIR /app
+
+# Copy mix dependencies
+COPY mix.exs mix.lock ./
+
+# Install hex and rebar
+RUN mix local.hex --force && \
+    mix local.rebar --force
+
+# Install dependencies
+RUN mix deps.get && mix deps.compile
+RUN mix zig.get # rebuild
+
+# Copy source code
+COPY . .
+
+# Compile the project
+RUN mix compile
+
+# Show successful compilation message  
+RUN echo "✅ Sambex successfully compiled in Docker container!"
