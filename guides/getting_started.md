@@ -9,7 +9,7 @@ Add `sambex` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:sambex, "~> 0.2.0"}
+    {:sambex, "~> 0.3.0"}
   ]
 end
 ```
@@ -70,16 +70,16 @@ For applications that need to work with multiple SMB shares, use named connectio
 ```elixir
 # Connect to different shares with meaningful names
 {:ok, _} = Sambex.Connection.start_link([
-  url: "smb://fileserver/documents", 
-  username: "user", 
+  url: "smb://fileserver/documents",
+  username: "user",
   password: "pass",
   name: :documents
 ])
 
 {:ok, _} = Sambex.Connection.start_link([
   url: "smb://fileserver/backups",
-  username: "user", 
-  password: "pass", 
+  username: "user",
+  password: "pass",
   name: :backups
 ])
 
@@ -94,16 +94,16 @@ All Sambex functions return tagged tuples, making error handling straightforward
 
 ```elixir
 case Sambex.Connection.read_file(conn, "/might_not_exist.txt") do
-  {:ok, content} -> 
+  {:ok, content} ->
     process_file(content)
-  
-  {:error, :enoent} -> 
+
+  {:error, :enoent} ->
     IO.puts("File not found - creating default")
     create_default_file(conn)
-    
+
   {:error, :eacces} ->
     IO.puts("Permission denied")
-    
+
   {:error, reason} ->
     IO.puts("Unexpected error: #{inspect(reason)}")
 end
@@ -121,10 +121,10 @@ defmodule BackupService do
       System.get_env("BACKUP_USER"),
       System.get_env("BACKUP_PASS")
     )
-    
+
     result = Sambex.Connection.upload_file(conn, local_path, remote_path)
     Sambex.Connection.disconnect(conn)
-    
+
     case result do
       {:ok, _} -> {:ok, "Backup successful"}
       error -> error
@@ -148,18 +148,18 @@ defmodule FileProcessor do
         |> Enum.each(fn {filename, _type} ->
           process_file(conn, "#{directory}/#{filename}")
         end)
-        
+
       {:error, reason} ->
         IO.puts("Failed to list directory: #{reason}")
     end
   end
-  
+
   defp process_file(conn, filepath) do
     case Sambex.Connection.read_file(conn, filepath) do
       {:ok, content} ->
         # Process the file content
         IO.puts("Processing #{filepath}: #{byte_size(content)} bytes")
-        
+
       {:error, reason} ->
         IO.puts("Failed to read #{filepath}: #{reason}")
     end
@@ -177,7 +177,7 @@ defmodule DirectorySync do
     |> Enum.each(fn filename ->
       local_path = Path.join(local_dir, filename)
       remote_path = "#{remote_dir}/#{filename}"
-      
+
       if File.regular?(local_path) do
         case Sambex.Connection.upload_file(conn, local_path, remote_path) do
           {:ok, _} -> IO.puts("✓ Synced #{filename}")
@@ -205,7 +205,7 @@ defmodule MyApp.Application do
   def start(_type, _args) do
     children = [
       # Your other children...
-      
+
       # SMB connections
       {Sambex.Connection, [
         url: "smb://production-fileserver/app-data",
@@ -213,10 +213,10 @@ defmodule MyApp.Application do
         password: System.get_env("SMB_PASSWORD"),
         name: :app_data
       ]},
-      
+
       {Sambex.Connection, [
         url: "smb://backup-server/backups",
-        username: System.get_env("BACKUP_USERNAME"), 
+        username: System.get_env("BACKUP_USERNAME"),
         password: System.get_env("BACKUP_PASSWORD"),
         name: :backups
       ]}
@@ -234,14 +234,14 @@ Then use the connections throughout your application:
 defmodule MyApp.DataService do
   def save_report(report_data) do
     filename = "/reports/#{Date.utc_today()}_report.json"
-    
+
     case Sambex.Connection.write_file(:app_data, filename, Jason.encode!(report_data)) do
-      {:ok, _} -> 
+      {:ok, _} ->
         # Also backup the report
         Sambex.Connection.write_file(:backups, filename, Jason.encode!(report_data))
         {:ok, "Report saved successfully"}
-        
-      {:error, reason} -> 
+
+      {:error, reason} ->
         {:error, "Failed to save report: #{reason}"}
     end
   end
@@ -251,7 +251,7 @@ end
 ## Next Steps
 
 - Read the [API documentation](Sambex.html) for detailed function information
-- Learn about [connection management](Sambex.Connection.html) 
+- Learn about [connection management](Sambex.Connection.html)
 - Explore [supervisor patterns](Sambex.ConnectionSupervisor.html)
 - Check out the [examples repository](https://github.com/wearecococo/sambex/tree/main/examples) for more use cases
 

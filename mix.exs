@@ -66,6 +66,7 @@ defmodule Sambex.MixProject do
     [
       main: "getting_started",
       name: "Sambex",
+      logo: "logo.jpeg",
       source_ref: "v#{Application.spec(:sambex, :vsn)}",
       canonical: "http://hexdocs.pm/sambex",
       source_url: "https://github.com/wearecococo/sambex",

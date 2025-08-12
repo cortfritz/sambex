@@ -4,25 +4,12 @@
 
 # Sambex
 
+> Samba Ex - Sambex
+
 Sambex is a library for interacting with SMB (Server Message Block) shares in Elixir.
 
-## Questions
-
-Because a little role-play solves many problems.
-
-```text
-Q: Is it any good?
-A: No. It's not. Not yet.
-
-Q: Should you install it?
-A: No. It's not ready yet.
-
-Q: I used this in production and everything went wrong.
-A: Thanks for doing QA - please report any issues on GitHub.
-
-Q: Should I install it anyway?
-A: Sure. I mean, what other options do you have?
-```
+It supports a one-shot style interface for basic operations, managed connections for regular operations
+against SMB shares, and a HotFolder API for monitoring and reacting to file changes.
 
 ## Features
 
@@ -44,12 +31,6 @@ A: Sure. I mean, what other options do you have?
 - Large file operations
 - Multiple share support
 
-✅ **Comprehensive Testing**
-- Unit tests for basic functionality
-- Integration tests against real SMB server
-- 33 tests covering all operations
-- Docker-based test environment
-
 ## Installation
 
 Sambex can be installed by adding `sambex` to your list of dependencies
@@ -58,12 +39,12 @@ in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:sambex, "~> 0.1.1"}
+    {:sambex, "~> 0.3.0"}
   ]
 end
 ```
 
-## Usage
+## Usage - Basic API
 
 You must ensure to initialize the library before using it.
 
