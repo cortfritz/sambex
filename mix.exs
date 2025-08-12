@@ -4,7 +4,7 @@ defmodule Sambex.MixProject do
   def project do
     [
       app: :sambex,
-      version: "0.2.0",
+      version: "0.3.0",
       elixir: "~> 1.18",
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
@@ -32,7 +32,7 @@ defmodule Sambex.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger, :ssl],
+      extra_applications: [:logger, :ssl, :telemetry],
       mod: {Sambex.Application, []}
     ]
   end
@@ -40,6 +40,7 @@ defmodule Sambex.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:telemetry, "~> 1.0"},
       {:zigler, "~> 0.14", runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

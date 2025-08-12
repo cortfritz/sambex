@@ -70,14 +70,17 @@ defmodule Sambex.ConnectionSupervisor do
       :ok = Sambex.ConnectionSupervisor.stop_connection(:my_share)
   """
   def stop_connection(conn_or_name) do
-    pid = case conn_or_name do
-      pid when is_pid(pid) -> pid
-      name when is_atom(name) ->
-        case Registry.lookup(Sambex.Registry, name) do
-          [{pid, _}] -> pid
-          [] -> raise ArgumentError, "No connection found with name #{inspect(name)}"
-        end
-    end
+    pid =
+      case conn_or_name do
+        pid when is_pid(pid) ->
+          pid
+
+        name when is_atom(name) ->
+          case Registry.lookup(Sambex.Registry, name) do
+            [{pid, _}] -> pid
+            [] -> raise ArgumentError, "No connection found with name #{inspect(name)}"
+          end
+      end
 
     DynamicSupervisor.terminate_child(Sambex.DynamicConnectionSupervisor, pid)
   end
@@ -94,16 +97,20 @@ defmodule Sambex.ConnectionSupervisor do
   def list_connections do
     # Get all children from the dynamic supervisor
     children = DynamicSupervisor.which_children(Sambex.DynamicConnectionSupervisor)
-    
+
     # Get all named connections from registry
-    named_connections = Registry.select(Sambex.Registry, [{{:"$1", :"$2", :_}, [], [{{:"$1", :"$2"}}]}])
+    named_connections =
+      Registry.select(Sambex.Registry, [{{:"$1", :"$2", :_}, [], [{{:"$1", :"$2"}}]}])
+
     named_map = Map.new(named_connections, fn {name, pid} -> {pid, name} end)
 
     # Build result list
     for {_, pid, _, _} <- children, is_pid(pid) do
       case Map.get(named_map, pid) do
-        nil -> {pid, pid}  # Unnamed connection
-        name -> {name, pid}  # Named connection
+        # Unnamed connection
+        nil -> {pid, pid}
+        # Named connection
+        name -> {name, pid}
       end
     end
   end

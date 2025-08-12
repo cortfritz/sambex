@@ -27,3 +27,4 @@ sambex-*.tar
 .elixir-tools/
 
 notes/
+priv/plts/

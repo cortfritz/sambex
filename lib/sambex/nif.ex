@@ -3,7 +3,8 @@ defmodule Sambex.Nif do
 
   # Detect system library paths for libsmbclient
   @external_resource "lib/sambex/build_config.ex"
-  {{build_include_dirs, build_link_libs}, _bindings} = Code.eval_file("lib/sambex/build_config.ex")
+  {{build_include_dirs, build_link_libs}, _bindings} =
+    Code.eval_file("lib/sambex/build_config.ex")
 
   use Zig,
     otp_app: :sambex,
@@ -679,6 +680,70 @@ defmodule Sambex.Nif do
       const stats_map = beam.make(map_entries[0..], .{map_entries.len / 2});
 
       return beam.make(.{ok_atom, stats_map}, .{});
+  }
+
+  /// Create directory on SMB share
+  pub fn mkdir(url: []const u8, username: []const u8, password: []const u8) beam.term {
+      var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+      defer arena.deinit();
+      const allocator = arena.allocator();
+
+      // Create SMB context
+      const ctx = c.smbc_new_context();
+      if (ctx == null) {
+          const error_atom = beam.make_error_atom(.{});
+          const context_error_atom = beam.make_into_atom("context_creation_failed", .{});
+          return beam.make(.{error_atom, context_error_atom}, .{});
+      }
+      defer _ = c.smbc_free_context(ctx, 0);
+
+      // Initialize context
+      if (c.smbc_init_context(ctx) == null) {
+          const error_atom = beam.make_error_atom(.{});
+          const init_error_atom = beam.make_into_atom("context_init_failed", .{});
+          return beam.make(.{error_atom, init_error_atom}, .{});
+      }
+
+      // Set authentication callback
+      c.smbc_setFunctionAuthData(ctx, auth_callback);
+
+      // Set credentials
+      if (username.len >= global_username.len or password.len >= global_password.len) {
+          const error_atom = beam.make_error_atom(.{});
+          const creds_error_atom = beam.make_into_atom("credentials_too_long", .{});
+          return beam.make(.{error_atom, creds_error_atom}, .{});
+      }
+
+      @memcpy(global_workgroup[0..9], "WORKGROUP");
+      global_workgroup[9] = 0;
+
+      @memcpy(global_username[0..username.len], username);
+      global_username[username.len] = 0;
+
+      @memcpy(global_password[0..password.len], password);
+      global_password[password.len] = 0;
+
+      credentials_set = true;
+
+      const url_cstr = allocator.dupeZ(u8, url) catch {
+          const error_atom = beam.make_error_atom(.{});
+          const memory_error_atom = beam.make_into_atom("memory_error", .{});
+          return beam.make(.{error_atom, memory_error_atom}, .{});
+      };
+
+      // Set the context as current for libsmbclient
+      const old_ctx = c.smbc_set_context(ctx);
+      defer _ = c.smbc_set_context(old_ctx);
+
+      // Create the directory with permissions 0755
+      const result = c.smbc_mkdir(url_cstr.ptr, 0o755);
+      if (result < 0) {
+          const error_atom = beam.make_error_atom(.{});
+          const mkdir_failed_atom = beam.make_into_atom("mkdir_failed", .{});
+          return beam.make(.{error_atom, mkdir_failed_atom}, .{});
+      }
+
+      return beam.make_into_atom("ok", .{});
   }
   """
 end

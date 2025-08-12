@@ -132,6 +132,8 @@ defmodule Sambex.Connection do
   use GenServer
   require Logger
 
+  @type connection_ref :: pid() | atom()
+
   @doc """
   Start a connection GenServer.
 
@@ -159,10 +161,13 @@ defmodule Sambex.Connection do
   """
   def start_link(opts) do
     {name, opts} = Keyword.pop(opts, :name)
-    
+
     case name do
-      nil -> GenServer.start_link(__MODULE__, opts)
-      name -> GenServer.start_link(__MODULE__, opts, name: {:via, Registry, {Sambex.Registry, name}})
+      nil ->
+        GenServer.start_link(__MODULE__, opts)
+
+      name ->
+        GenServer.start_link(__MODULE__, opts, name: {:via, Registry, {Sambex.Registry, name}})
     end
   end
 
@@ -295,12 +300,41 @@ defmodule Sambex.Connection do
   end
 
   @doc """
+  Create a directory on the SMB share.
+
+  ## Parameters
+
+  - `conn_or_name` - Connection PID or registered name
+  - `path` - Path to the directory to create (relative to share root)
+
+  ## Returns
+
+  - `:ok` on success
+  - `{:error, reason}` on failure
+
+  ## Examples
+
+      {:ok, conn} = Sambex.Connection.connect("smb://server/share", "user", "pass")
+      :ok = Sambex.Connection.mkdir(conn, "/new_folder")
+
+      # Create nested directories (parent must exist first)
+      :ok = Sambex.Connection.mkdir(:my_share, "/reports")
+      :ok = Sambex.Connection.mkdir(:my_share, "/reports/2025")
+
+  """
+  @spec mkdir(connection_ref(), String.t()) :: :ok | {:error, any()}
+  def mkdir(conn_or_name, path) do
+    GenServer.call(resolve_connection(conn_or_name), {:mkdir, path})
+  end
+
+  @doc """
   Stop a connection.
 
   ## Examples
       :ok = Sambex.Connection.disconnect(conn)
       :ok = Sambex.Connection.disconnect(:my_share)
   """
+  @spec disconnect(connection_ref()) :: :ok
   def disconnect(conn_or_name) do
     GenServer.stop(resolve_connection(conn_or_name))
   end
@@ -373,9 +407,16 @@ defmodule Sambex.Connection do
     {:reply, result, state}
   end
 
+  def handle_call({:mkdir, path}, _from, state) do
+    url = build_url(state.url, path)
+    result = Sambex.mkdir(url, state.username, state.password)
+    {:reply, result, state}
+  end
+
   # Private functions
 
   defp resolve_connection(pid) when is_pid(pid), do: pid
+
   defp resolve_connection(name) when is_atom(name) do
     case Registry.lookup(Sambex.Registry, name) do
       [{pid, _}] -> pid
@@ -387,7 +428,7 @@ defmodule Sambex.Connection do
     # Remove trailing slash from base_url and leading slash from path if present
     base = String.trim_trailing(base_url, "/")
     path = String.trim_leading(path, "/")
-    
+
     case path do
       "" -> base
       _ -> "#{base}/#{path}"

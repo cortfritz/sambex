@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-08-12
+
+### Added
+
+- **Hot Folders**: Monitor directories for changes and trigger actions on file events
+  - `Sambex.HotFolder` GenServer for monitoring directories
+  - `Sambex.HotFolderSupervisor` for managing hot folder processes
+  - Named hot folders via Registry for easy reference to multiple folders
+  - Anonymous hot folders for simple use cases
+  - Hot folder pooling and lifecycle management
+  - Automatic supervision and fault tolerance
+
 ## [0.2.0] - 2025-08-12
 
 ### Added
@@ -23,8 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Named Connections**: Register connections with atoms for easy reference
   ```elixir
   {:ok, _} = Sambex.Connection.start_link(
-    url: "smb://server/share", 
-    username: "user", 
+    url: "smb://server/share",
+    username: "user",
     password: "pass",
     name: :main_share
   )
