@@ -1,5 +1,7 @@
 [![HexDocs](https://img.shields.io/badge/docs-latest-blue)](https://hexdocs.pm/sambex)
 
+<img src="https://github.com/user-attachments/assets/f2de6060-6ee6-4c7d-bf81-6df0d3fb219c" width="200" style="float: left;" />
+
 # Sambex
 
 Sambex is a library for interacting with SMB (Server Message Block) shares in Elixir.
