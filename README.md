@@ -10,13 +10,16 @@ Because a little role-play solves many problems.
 
 ```text
 Q: Is it any good?
-A: Yes! File deletion is now working and all tests pass.
+A: No. It's not. Not yet.
 
 Q: Should you install it?
-A: Yes! The SMB client is fully functional with comprehensive tests.
+A: No. It's not ready yet.
 
 Q: I used this in production and everything went wrong.
 A: Thanks for doing QA - please report any issues on GitHub.
+
+Q: Should I install it anyway?
+A: Sure. I mean, what other options do you have?
 ```
 
 ## Features

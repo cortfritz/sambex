@@ -3,6 +3,37 @@ defmodule Sambex do
   Elixir wrapper for Sambex using Zigler.
 
   Provides functionality to connect to SMB shares and perform file operations.
+
+  ## Two Usage Patterns
+
+  ### Direct API (original)
+  Pass credentials on every operation:
+
+      Sambex.init()
+      Sambex.list_dir("smb://server/share", "user", "pass")
+      Sambex.read_file("smb://server/share/file.txt", "user", "pass")
+
+  ### Connection API (recommended)
+  Create persistent connections that store credentials:
+
+      # Start the connection supervisor (usually in application.ex)
+      Sambex.ConnectionSupervisor.start_link()
+
+      # Create named connections
+      {:ok, _} = Sambex.Connection.start_link(
+        url: "smb://server/share",
+        username: "user", 
+        password: "pass",
+        name: :main_share
+      )
+
+      # Use the connection
+      Sambex.Connection.list_dir(:main_share, "/")
+      Sambex.Connection.read_file(:main_share, "/file.txt")
+
+      # Or create anonymous connections
+      {:ok, conn} = Sambex.Connection.connect("smb://server/share", "user", "pass")
+      Sambex.Connection.list_dir(conn, "/")
   """
 
   alias Sambex.Nif
