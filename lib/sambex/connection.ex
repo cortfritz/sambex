@@ -2,33 +2,131 @@ defmodule Sambex.Connection do
   @moduledoc """
   GenServer for maintaining persistent SMB connections.
 
-  Provides a connection-based API that avoids passing credentials
-  on every operation. Connections can be started with or without names
-  for easy reference.
+  This module provides a connection-based API that stores credentials securely
+  in GenServer state and avoids passing them on every operation. Connections
+  can be anonymous (referenced by PID) or named (referenced by atom) for easy
+  access throughout your application.
 
-  ## Examples
+  ## Benefits of Connection API
 
-      # Start an anonymous connection
-      {:ok, conn} = Sambex.Connection.start_link(
-        url: "smb://192.168.1.100/share",
-        username: "user",
-        password: "pass"
-      )
+  - **Security**: Credentials stored in process state, not passed around
+  - **Performance**: Avoids reconnection overhead on each operation  
+  - **Fault Tolerance**: Full OTP supervision support with automatic restarts
+  - **Multiple Shares**: Easy management of connections to different SMB shares
+  - **Elixir Idioms**: Follows GenServer and OTP patterns
 
-      # Start a named connection
-      {:ok, _pid} = Sambex.Connection.start_link(
-        url: "smb://192.168.1.100/docs",
+  ## Connection Types
+
+  ### Anonymous Connections
+  Referenced by PID, suitable for short-lived operations:
+
+      {:ok, conn} = Sambex.Connection.connect("smb://server/share", "user", "pass")
+      Sambex.Connection.list_dir(conn, "/")
+      Sambex.Connection.disconnect(conn)
+
+  ### Named Connections  
+  Referenced by atom, ideal for long-lived application connections:
+
+      {:ok, _} = Sambex.Connection.start_link([
+        url: "smb://fileserver/documents",
         username: "user", 
         password: "pass",
-        name: :docs_share
-      )
+        name: :documents
+      ])
+      
+      # Use throughout your application
+      Sambex.Connection.read_file(:documents, "/report.pdf")
 
-      # Use the connections
-      Sambex.Connection.list_dir(conn, "/")
-      Sambex.Connection.list_dir(:docs_share, "/reports")
+  ### Supervised Connections
+  Managed by the connection supervisor for production use:
 
-      # Convenience function
-      {:ok, conn} = Sambex.Connection.connect("smb://server/share", "user", "pass")
+      {:ok, conn} = Sambex.ConnectionSupervisor.start_connection([
+        url: "smb://server/share",
+        username: "user",
+        password: "pass", 
+        name: :production_share
+      ])
+
+  ## Complete Example
+
+      # Start named connections for different purposes
+      {:ok, _} = Sambex.Connection.start_link([
+        url: "smb://fileserver/app-data",
+        username: System.get_env("SMB_USER"),
+        password: System.get_env("SMB_PASS"),
+        name: :app_data
+      ])
+      
+      {:ok, _} = Sambex.Connection.start_link([
+        url: "smb://backup-server/backups", 
+        username: System.get_env("BACKUP_USER"),
+        password: System.get_env("BACKUP_PASS"),
+        name: :backups
+      ])
+
+      # Perform operations using named connections
+      {:ok, files} = Sambex.Connection.list_dir(:app_data, "/uploads")
+      
+      for {filename, :file} <- files do
+        # Process each file
+        {:ok, content} = Sambex.Connection.read_file(:app_data, "/uploads/\#{filename}")
+        
+        # Backup processed files
+        processed = process_file(content)
+        Sambex.Connection.write_file(:backups, "/processed/\#{filename}", processed)
+      end
+
+  ## Error Handling
+
+  All functions return standard `{:ok, result}` or `{:error, reason}` tuples:
+
+      case Sambex.Connection.read_file(:docs, "/important.pdf") do
+        {:ok, content} -> 
+          save_to_local(content)
+        {:error, :enoent} -> 
+          Logger.warn("File not found: /important.pdf")
+        {:error, :eacces} ->
+          Logger.error("Permission denied accessing /important.pdf") 
+        {:error, reason} ->
+          Logger.error("Unexpected error: \#{inspect(reason)}")
+      end
+
+  ## Path Handling
+
+  All file paths are relative to the share root specified in the connection URL:
+
+      # Connection to smb://server/documents
+      {:ok, conn} = Sambex.Connection.connect("smb://server/documents", "user", "pass")
+      
+      # These paths are relative to /documents on the server
+      Sambex.Connection.list_dir(conn, "/")          # Lists /documents/ 
+      Sambex.Connection.read_file(conn, "/file.txt") # Reads /documents/file.txt
+      Sambex.Connection.list_dir(conn, "/reports")   # Lists /documents/reports/
+
+  ## Production Integration
+
+  For production applications, integrate connections into your supervision tree:
+
+      # In your application.ex
+      children = [
+        {Sambex.Connection, [
+          url: "smb://production-server/app-files",
+          username: Application.get_env(:my_app, :smb_username),
+          password: Application.get_env(:my_app, :smb_password),
+          name: :app_files
+        ]}
+      ]
+
+  ## Connection Lifecycle
+
+  Connections are GenServer processes that:
+
+  1. **Initialize** with SMB credentials and URL
+  2. **Handle calls** for SMB operations, forwarding to the underlying NIF
+  3. **Maintain state** with connection details for the session
+  4. **Clean up** automatically when the process terminates
+
+  The actual SMB connection is managed by the underlying libsmbclient library.
   """
 
   use GenServer

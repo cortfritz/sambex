@@ -63,8 +63,27 @@ defmodule Sambex.MixProject do
 
   defp docs do
     [
-      main: "Sambex",
-      extras: ["README.md"]
+      main: "getting_started",
+      name: "Sambex", 
+      source_ref: "v#{Application.spec(:sambex, :vsn)}",
+      canonical: "http://hexdocs.pm/sambex",
+      source_url: "https://github.com/wearecococo/sambex",
+      extras: [
+        "guides/getting_started.md",
+        "guides/examples.md", 
+        "CHANGELOG.md",
+        "README.md"
+      ],
+      groups_for_extras: [
+        "Guides": ~r/guides\/.?/,
+        "Project Info": ["CHANGELOG.md", "README.md"]
+      ],
+      groups_for_modules: [
+        "Core API": [Sambex],
+        "Connection API": [Sambex.Connection, Sambex.ConnectionSupervisor],
+        "Internal": [Sambex.Application, Sambex.Nif]
+      ],
+      skip_undefined_reference_warnings_on: ["CHANGELOG.md", "README.md"]
     ]
   end
 end
