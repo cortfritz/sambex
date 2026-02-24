@@ -127,11 +127,10 @@ defmodule Sambex.HotFolder.Config do
       backoff_factor: 1.5
     },
 
-    # File filtering
+    # File filtering (exclude_patterns populated at runtime to avoid Regex in struct default)
     filters: %{
       name_patterns: [],
-      # Skip hidden files by default
-      exclude_patterns: [~r/^\./],
+      exclude_patterns: [],
       min_size: 0,
       max_size: :infinity,
       mime_types: []
@@ -164,7 +163,22 @@ defmodule Sambex.HotFolder.Config do
   @spec new(map()) :: {:ok, t()} | {:error, String.t()}
   def new(params) when is_map(params) do
     config = struct(__MODULE__, params)
+    # Apply default exclude pattern for hidden files if not specified
+    config = apply_default_filters(config)
     validate(config)
+  end
+
+  defp apply_default_filters(%__MODULE__{filters: filters} = config) do
+    default_exclude = [~r/^\./]
+
+    updated_filters =
+      if filters[:exclude_patterns] == [] do
+        Map.put(filters, :exclude_patterns, default_exclude)
+      else
+        filters
+      end
+
+    %{config | filters: updated_filters}
   end
 
   @doc """
