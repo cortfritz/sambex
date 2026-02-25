@@ -33,7 +33,7 @@ defmodule Sambex.Nif do
   var credentials_set: bool = false;
 
   // Authentication callback
-  fn auth_callback(srv: [*c]const u8, shr: [*c]const u8, workgroup: [*c]u8, workgroup_len: c_int, username: [*c]u8, username_len: c_int, password: [*c]u8, password_len: c_int) callconv(.C) void {
+  fn auth_callback(srv: [*c]const u8, shr: [*c]const u8, workgroup: [*c]u8, workgroup_len: c_int, username: [*c]u8, username_len: c_int, password: [*c]u8, password_len: c_int) callconv(.c) void {
       _ = srv;
       _ = shr;
 
@@ -255,7 +255,7 @@ defmodule Sambex.Nif do
       }
       defer _ = c.smbc_closedir(dir);
 
-      var files = std.ArrayList(beam.term).init(allocator);
+      var files: std.ArrayListUnmanaged(beam.term) = .{};
 
       while (true) {
           const dirent = c.smbc_readdir(@as(c_uint, @intCast(dir)));
@@ -277,7 +277,7 @@ defmodule Sambex.Nif do
           const name_binary = beam.make(name, .{});
           const file_type_atom = beam.make_into_atom(file_type_str, .{});
           const entry = beam.make(.{name_binary, file_type_atom}, .{});
-          files.append(entry) catch {
+          files.append(allocator, entry) catch {
               const error_atom = beam.make_error_atom(.{});
               const memory_error_atom = beam.make_into_atom("memory_error", .{});
               return beam.make(.{error_atom, memory_error_atom}, .{});

@@ -41,7 +41,7 @@ defmodule Sambex.MixProject do
   defp deps do
     [
       {:telemetry, "~> 1.0"},
-      {:zigler, "~> 0.14", runtime: false},
+      {:zigler, "~> 0.15.2", runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
